@@ -1,11 +1,12 @@
 #include "Foundation.h"
 #include <cstdio>
 #include <iostream>
+#include <cmath>
 
 using namespace std;
 
 int ToInt(double x) {
-	return int(pow(1 - exp(-x), 1 / 2.2) * 255 + 0.5);
+	return max(min(int(pow(1 - exp(-x), 1 / 2.2) * 255 + 0.5), 255), 0);
 }
 
 unsigned int CalcHash(const int& x, const int& y, const int& z, int numHash) {
@@ -224,7 +225,7 @@ void Ray::CastEyeRay(vector<Shape*>& shapes, int dpt, vec3 fl, vec3 adj, int i, 
 		cout << hitPos[0] << " " << hitPos[1] << " " << hitPos[2];
 		cout << newD[0] << " " << newD[1] << " " << newD[2];*/
 
-		Ray newRay = Ray(hitPos + hitNormal*0.001, direction - hitNormal * 2.0*(hitNormal*direction));
+		Ray newRay = Ray(hitPos, direction - hitNormal * 2.0*(hitNormal*direction));
 		newRay.CastEyeRay(shapes, dpt, color%fl, color%adj, i, pixelIndex, hitInfoList);
 
 		break;
@@ -233,7 +234,7 @@ void Ray::CastEyeRay(vector<Shape*>& shapes, int dpt, vec3 fl, vec3 adj, int i, 
 	{
 		//cout << "Refraction" << endl;
 
-		Ray lr = Ray(hitPos + hitNormal * 0.001, direction - hitNormal * 2.0*(hitNormal*direction));
+		Ray lr = Ray(hitPos, direction - hitNormal * 2.0*(hitNormal*direction));
 		bool into = (hitNormal * normal > 0.0);
 		double nc = 1.0, nt = 1.5;
 		double nnt = into ? nc / nt : nt / nc;
@@ -252,7 +253,7 @@ void Ray::CastEyeRay(vector<Shape*>& shapes, int dpt, vec3 fl, vec3 adj, int i, 
 		double Re = R0 + (1 - R0)*c*c*c*c*c;
 		double P = Re;
 		vec3 fa = color % adj;
-		Ray rr = Ray(hitPos + 0.001*(into ? -1 * hitNormal : 0.1*hitNormal), td);
+		Ray rr = Ray(hitPos, td);
 
 		lr.CastEyeRay(shapes, dpt, fl, fa*Re, i, pixelIndex, hitInfoList);
 		rr.CastEyeRay(shapes, dpt, fl, fa*(1.0 - Re), i, pixelIndex, hitInfoList);
@@ -319,16 +320,17 @@ void Ray::CastPhotonRay(vector<Shape*>& shapes, int dpt, vec3 fl, vec3 adj, int 
 				}
 			}
 		}
-		if (Hal(d3 + 1, i) < p)
-			CastPhotonRay(shapes, dpt, color%fl*(1.0 / p), adj, i, bbox, numHash, hashS, hashGrid);
-
+		if (Hal(d3 + 1, i) < p) {
+			Ray newRay = Ray(hitPos, d);
+			newRay.CastPhotonRay(shapes, dpt, (color%fl)*(1.0 / p), adj, i, bbox, numHash, hashS, hashGrid);
+		}
 		break;
 	}
 	case SPECULAR:
 	{
 		//cout << "Specular" << endl;
 
-		Ray newRay = Ray(hitPos + hitNormal * 0.001, direction - hitNormal * 2.0*(hitNormal*direction));
+		Ray newRay = Ray(hitPos, direction - hitNormal * 2.0*(hitNormal*direction));
 		newRay.CastPhotonRay(shapes, dpt, color%fl, color%adj, i, bbox, numHash, hashS, hashGrid);
 
 		break;
@@ -337,7 +339,7 @@ void Ray::CastPhotonRay(vector<Shape*>& shapes, int dpt, vec3 fl, vec3 adj, int 
 	{
 		//cout << "Refraction" << endl;
 
-		Ray lr = Ray(hitPos + 0.001*hitNormal, direction - hitNormal * 2.0*(hitNormal*direction));
+		Ray lr = Ray(hitPos, direction - hitNormal * 2.0*(hitNormal*direction));
 		bool into = hitNormal * normal > 0.0;
 		double nc = 1.0, nt = 1.5;
 		double nnt = into ? nc / nt : nt / nc;
@@ -356,7 +358,7 @@ void Ray::CastPhotonRay(vector<Shape*>& shapes, int dpt, vec3 fl, vec3 adj, int 
 		double Re = R0 + (1 - R0)*c*c*c*c*c;
 		double P = Re;
 		vec3 fa = color % adj;
-		Ray rr = Ray(hitPos + 0.001*(into ? -1 * hitNormal : 0.1*hitNormal), td);
+		Ray rr = Ray(hitPos, td);
 
 		(Hal(d3 - 1, i) < P) ? lr.CastPhotonRay(shapes, dpt, fl, fa, i, bbox, numHash, hashS, hashGrid) :
 			rr.CastPhotonRay(shapes, dpt, fl, fa, i, bbox, numHash, hashS, hashGrid);

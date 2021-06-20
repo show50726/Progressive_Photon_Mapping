@@ -3,7 +3,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 15
 VisualStudioVersion = 15.0.27703.2035
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "PhotonMapping", "PhotonMapping\PhotonMapping.vcxproj", "{A567A627-7B9D-4965-8472-D4FB297A166B}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "PhotonMapping", "PhotonMapping.vcxproj", "{A567A627-7B9D-4965-8472-D4FB297A166B}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -26,6 +26,6 @@ Global
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
-		SolutionGuid = {74E68BC3-5E94-4EEB-BDC6-154105D588F3}
+		SolutionGuid = {D37B1D4A-4FDC-46F9-A2EB-CCA1AAC2D3C8}
 	EndGlobalSection
 EndGlobal

@@ -17,16 +17,16 @@ tuple<bool, float> Sphere::HasIntersect(Ray ray)
 	float r1 = (-b + sd) / (2 * a);
 	float r2 = (-b - sd) / (2 * a);
 
-	if (r1 < 0 && r2 < 0)
+	if ((r1 < 0 && r2 < 0) || (r1 < 5e-2 && r2 < 5e-2))
 		return make_tuple(false, 0);
 
-	if (r1 < 0)
+	if (r1 < 0 && r2 > 5e-2)
 		return make_tuple(true, r2);
 
-	if (r2 < 0)
+	if (r2 < 0 && r1 > 5e-2)
 		return make_tuple(true, r1);
 
-	return make_tuple(true, min(r1, r2));
+	return make_tuple(true, min(r1, r2) > 5e-2 ? min(r1, r2) : max(r1, r2));
 }
 
 tuple<bool, float> Triangle::HasIntersect(Ray ray)
