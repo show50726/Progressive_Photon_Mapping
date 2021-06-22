@@ -39,6 +39,8 @@ struct HitInfo {
 	{
 		hitObj = obj;
 		hitPos = pos;
+		r2 = 0;
+		flux = vec3();
 	}
 };
 

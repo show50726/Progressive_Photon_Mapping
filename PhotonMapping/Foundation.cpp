@@ -5,6 +5,10 @@
 
 using namespace std;
 
+const double REFRACTIVE_INDEX_IN_VACUUM = 1.0;
+const double REFRACTIVE_INDEX_IN_GLASS = 1.5;
+
+// TODO: Move math utils to another .c
 int ToInt(double x) {
 	return max(min(int(pow(1 - exp(-x), 1 / 2.2) * 255 + 0.5), 255), 0);
 }
@@ -29,8 +33,6 @@ BoundingBox BuildHashGridForPhoton(const int width, const int height, double& ha
 	
 	for (auto& hp : hitPoints) {
 		hp.r2 = irad * irad;
-		hp.n = 0;
-		hp.flux = vec3();
 		vphoton++;
 		bbox2.Fit(hp.hitPos - irad);
 		bbox2.Fit(hp.hitPos + irad);
@@ -45,10 +47,13 @@ BoundingBox BuildHashGridForPhoton(const int width, const int height, double& ha
 	for (unsigned int i = 0; i < numHash; i++) {
 		hashGrid[i] = NULL;
 	}
+
 	for (auto& hp : hitPoints) {
 		vec3 bMin = ((hp.hitPos - irad) - vec3(bbox2.xMin, bbox2.yMin, bbox2.zMin))*hashS;
 		vec3 bMax = ((hp.hitPos + irad) - vec3(bbox2.xMin, bbox2.yMin, bbox2.zMin))*hashS;
 
+		// NEED REFACTORING
+		// MAKE HASH GRID A CLASS
 		for (int iz = abs(int(bMin[2])); iz <= abs(int(bMax[2])); iz++) {
 			for (int iy = abs(int(bMin[1])); iy <= abs(int(bMax[1])); iy++) {
 				for (int ix = abs(int(bMin[0])); ix <= abs(int(bMax[0])); ix++) {
@@ -68,6 +73,7 @@ BoundingBox BuildHashGridForPhoton(const int width, const int height, double& ha
 				}
 			}
 		}
+		//
 	}
 	
 
@@ -99,20 +105,6 @@ vec3 Reflect(const vec3 inVector, const vec3 normal)
 	return (v + h).normalize();
 }
 
-vector<Shape*> GetExcludeVector(vector<Shape*>& shapes, vector<Shape*> exclude)
-{
-	vector<Shape*> temp;
-
-	for (auto shape : shapes)
-	{
-		if (find(exclude.begin(), exclude.end(), shape) != exclude.end())
-			continue;
-
-		temp.push_back(shape);
-	}
-	return temp;
-}
-
 HitInfo Ray::BroadPhaseDetection(vector<Shape*>& shapes)
 {
 	if (_broadPhase == NULL) {
@@ -138,6 +130,27 @@ void Ray::GeneratePhotonRay(vec3& f, int i) {
 	direction = vec3(cos(p)*st, cos(t), sin(p)*st);
 }
 
+double CalculateCos2t(bool isIntoGlass, vec3& rayDirection, vec3& normal) {
+	double nnt = isIntoGlass ? REFRACTIVE_INDEX_IN_VACUUM / REFRACTIVE_INDEX_IN_GLASS : REFRACTIVE_INDEX_IN_GLASS / REFRACTIVE_INDEX_IN_VACUUM;
+	double ddn = rayDirection * normal;
+	double cos2t = 1 - nnt * nnt*(1 - ddn * ddn);
+
+	return cos2t;
+}
+
+bool IsTotalInternalReflection(double cos2t) {
+	return cos2t < 0;
+}
+
+vec3 Refract(bool isIntoGlass, vec3& rayDirection, vec3& normal, vec3& hitNormal) {
+	double nnt = isIntoGlass ? REFRACTIVE_INDEX_IN_VACUUM / REFRACTIVE_INDEX_IN_GLASS : REFRACTIVE_INDEX_IN_GLASS / REFRACTIVE_INDEX_IN_VACUUM;
+	double ddn = rayDirection * normal;
+	double cos2t = 1 - nnt * nnt*(1 - ddn * ddn);
+
+	vec3 refractDir = (rayDirection*nnt - hitNormal * ((isIntoGlass ? 1 : -1)*(ddn*nnt + sqrt(cos2t)))).normalize();
+	return refractDir;
+}
+
 void Ray::CastEyeRay(vector<Shape*>& shapes, int dpt, vec3 fl, vec3 adj, int i, int pixelIndex, vector<HitInfo>& hitInfoList) {
 	dpt++;
 	int d3 = dpt * 3;
@@ -154,7 +167,7 @@ void Ray::CastEyeRay(vector<Shape*>& shapes, int dpt, vec3 fl, vec3 adj, int i, 
 	vec3 hitNormal = shape->GetNormal(hitPos);
 	vec3 color = shape->material.color;
 	vec3 normal = hitNormal * this->direction < 0 ? hitNormal : hitNormal * -1.0;
-	double p = max(color[0], max(color[1], color[2]));
+	double maxC = max(color[0], max(color[1], color[2]));
 
 	switch (shape->material.rType) {
 	case DIFFUSE:
@@ -175,29 +188,29 @@ void Ray::CastEyeRay(vector<Shape*>& shapes, int dpt, vec3 fl, vec3 adj, int i, 
 	}
 	case REFRACTION:
 	{
-		Ray lr = Ray(hitPos, direction - hitNormal * 2.0*(hitNormal*direction));
+		vec3 reflectDir = Reflect(direction, hitNormal);
+		Ray reflectRay = Ray(hitPos, reflectDir);
 		bool into = (hitNormal * normal > 0.0);
-		double nc = 1.0, nt = 1.5;
-		double nnt = into ? nc / nt : nt / nc;
 		double ddn = direction * normal;
-		double cos2t = 1 - nnt * nnt*(1 - ddn * ddn);
+		
+		double cos2t = CalculateCos2t(into, direction, normal);
 
-		if (cos2t < 0) {
-			return lr.CastEyeRay(shapes, dpt, fl, adj, i, pixelIndex, hitInfoList);
+		if (IsTotalInternalReflection(cos2t) < 0) {
+			return reflectRay.CastEyeRay(shapes, dpt, fl, adj, i, pixelIndex, hitInfoList);
 		}
 
-		vec3 td = (direction*nnt - hitNormal * ((into ? 1 : -1)*(ddn*nnt + sqrt(cos2t)))).normalize();
-		double a = nt - nc;
-		double b = nt + nc;
-		double c = 1 - (into ? -ddn : (td*hitNormal));
+		vec3 refractDir = Refract(into, direction, normal, hitNormal);
+		double a = REFRACTIVE_INDEX_IN_GLASS - REFRACTIVE_INDEX_IN_VACUUM;
+		double b = REFRACTIVE_INDEX_IN_GLASS + REFRACTIVE_INDEX_IN_VACUUM;
+		double c = 1 - (into ? -ddn : (refractDir*hitNormal));
 		double R0 = (a*a) / (b*b);
 		double Re = R0 + (1 - R0)*c*c*c*c*c;
 		double P = Re;
 		vec3 fa = color % adj;
-		Ray rr = Ray(hitPos, td);
+		Ray refractRay = Ray(hitPos, refractDir);
 
-		lr.CastEyeRay(shapes, dpt, fl, fa*Re, i, pixelIndex, hitInfoList);
-		rr.CastEyeRay(shapes, dpt, fl, fa*(1.0 - Re), i, pixelIndex, hitInfoList);
+		reflectRay.CastEyeRay(shapes, dpt, fl, fa*Re, i, pixelIndex, hitInfoList);
+		refractRay.CastEyeRay(shapes, dpt, fl, fa*(1.0 - Re), i, pixelIndex, hitInfoList);
 
 		break;
 	}
@@ -220,7 +233,7 @@ void Ray::CastPhotonRay(vector<Shape*>& shapes, int dpt, vec3 fl, vec3 adj, int 
 	vec3 hitNormal = shape->GetNormal(hitPos);
 	vec3 color = shape->material.color;
 	vec3 normal = hitNormal * this->direction < 0 ? hitNormal : hitNormal * -1.0;
-	double p = max(color[0], max(color[1], color[2]));
+	double maxC = max(color[0], max(color[1], color[2]));
 
 	switch (shape->material.rType) {
 	case DIFFUSE:
@@ -228,13 +241,6 @@ void Ray::CastPhotonRay(vector<Shape*>& shapes, int dpt, vec3 fl, vec3 adj, int 
 		double r1 = 2.0*PI*Hal(d3 - 1, i);
 		double r2 = Hal(d3 + 0, i);
 		double r2s = sqrt(r2);
-
-		// QMC
-		vec3 w = normal;
-		vec3 u = ((fabs(w[0]) > 0.1 ? vec3(0, 1, 0) : vec3(1, 0, 0)) ^ w).normalize();
-		vec3 v = w ^ u;
-		vec3 d = (u*cos(r1)*r2s + v * sin(r1)*r2s + w * sqrt(1 - r2)).normalize();
-		//
 
 		vec3 hh = (hitPos - vec3(bbox->xMin, bbox->yMin, bbox->zMin))*hashS;
 		int ix = abs(int(hh[0]));
@@ -257,44 +263,53 @@ void Ray::CastPhotonRay(vector<Shape*>& shapes, int dpt, vec3 fl, vec3 adj, int 
 				}
 			}
 		}
-		if (Hal(d3 + 1, i) < p) {
+
+		// QMC
+		vec3 w = normal;
+		vec3 u = ((fabs(w[0]) > 0.1 ? vec3(0, 1, 0) : vec3(1, 0, 0)) ^ w).normalize();
+		vec3 v = w ^ u;
+		vec3 d = (u*cos(r1)*r2s + v * sin(r1)*r2s + w * sqrt(1 - r2)).normalize();
+		//
+
+		if (Hal(d3 + 1, i) < maxC) {
 			Ray newRay = Ray(hitPos, d);
-			newRay.CastPhotonRay(shapes, dpt, (color%fl)*(1.0 / p), adj, i, bbox, numHash, hashS, hashGrid);
+			newRay.CastPhotonRay(shapes, dpt, (color%fl)*(1.0 / maxC), adj, i, bbox, numHash, hashS, hashGrid);
 		}
 		break;
 	}
 	case SPECULAR:
 	{
-		Ray newRay = Ray(hitPos, direction - hitNormal * 2.0*(hitNormal*direction));
+		vec3 reflectDir = Reflect(direction, hitNormal);
+		Ray newRay = Ray(hitPos, reflectDir);
 		newRay.CastPhotonRay(shapes, dpt, color%fl, color%adj, i, bbox, numHash, hashS, hashGrid);
 
 		break;
 	}
 	case REFRACTION:
 	{
-		Ray lr = Ray(hitPos, direction - hitNormal * 2.0*(hitNormal*direction));
-		bool into = hitNormal * normal > 0.0;
-		double nc = 1.0, nt = 1.5;
-		double nnt = into ? nc / nt : nt / nc;
+		vec3 reflectDir = Reflect(direction, hitNormal);
+		Ray reflectRay = Ray(hitPos, reflectDir);
+		bool into = (hitNormal * normal > 0.0);
 		double ddn = direction * normal;
-		double cos2t = 1 - nnt * nnt*(1 - ddn * ddn);
 
-		if (cos2t < 0) {
-			return lr.CastPhotonRay(shapes, dpt, fl, adj, i, bbox, numHash, hashS, hashGrid);
+		double cos2t = CalculateCos2t(into, direction, normal);
+
+		if (IsTotalInternalReflection(cos2t)) {
+			return reflectRay.CastPhotonRay(shapes, dpt, fl, adj, i, bbox, numHash, hashS, hashGrid);
 		}
 
-		vec3 td = (direction*nnt - hitNormal * ((into ? 1 : -1)*(ddn*nnt + sqrt(cos2t)))).normalize();
-		double a = nt - nc;
-		double b = nt + nc;
-		double c = 1 - (into ? -ddn : (td*hitNormal));
+		vec3 refractDir = Refract(into, direction, normal, hitNormal);
+		double a = REFRACTIVE_INDEX_IN_GLASS - REFRACTIVE_INDEX_IN_VACUUM;
+		double b = REFRACTIVE_INDEX_IN_GLASS + REFRACTIVE_INDEX_IN_VACUUM;
+		double c = 1 - (into ? -ddn : (refractDir*hitNormal));
 		double R0 = (a*a) / (b*b);
 		double Re = R0 + (1 - R0)*c*c*c*c*c;
 		double P = Re;
 		vec3 fa = color % adj;
-		Ray rr = Ray(hitPos, td);
+		Ray refractRay = Ray(hitPos, refractDir);
 
-		(Hal(d3 - 1, i) < P) ? lr.CastPhotonRay(shapes, dpt, fl, fa, i, bbox, numHash, hashS, hashGrid) :
-			rr.CastPhotonRay(shapes, dpt, fl, fa, i, bbox, numHash, hashS, hashGrid);
+		(Hal(d3 - 1, i) < P) ? reflectRay.CastPhotonRay(shapes, dpt, fl, fa, i, bbox, numHash, hashS, hashGrid) :
+			refractRay.CastPhotonRay(shapes, dpt, fl, fa, i, bbox, numHash, hashS, hashGrid);
 		break;
 	}
 	}
