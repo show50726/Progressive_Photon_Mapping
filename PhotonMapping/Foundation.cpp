@@ -5,17 +5,6 @@
 
 using namespace std;
 
-const double REFRACTIVE_INDEX_IN_VACUUM = 1.0;
-const double REFRACTIVE_INDEX_IN_GLASS = 1.5;
-
-// TODO: Move math utils to another .c
-int ToInt(double x) {
-	return max(min(int(pow(1 - exp(-x), 1 / 2.2) * 255 + 0.5), 255), 0);
-}
-
-unsigned int CalcHash(const int& x, const int& y, const int& z, int numHash) {
-	return (unsigned int)((x * 73856093) ^ (y * 19349663) ^ (z * 83492791)) % numHash;
-}
 
 BoundingBox BuildHashGridForPhoton(const int width, const int height, double& hashS, double& numHash, vector<HitInfo>& hitPoints, vector<HitInfoNode*>& hashGrid) {
 	BoundingBox bbox1 = BoundingBox();
@@ -80,30 +69,7 @@ BoundingBox BuildHashGridForPhoton(const int width, const int height, double& ha
 	return bbox2;
 }
 
-inline int rev(const int& i, const int& p) {
-	return i == 0 ? i : p - i;
-}
 
-double Hal(const int& b, int j) {
-	const int p = primes[b];
-	double h = 0.0, f = 1.0 / (double)p, fct = f;
-	while (j > 0) {
-		h += rev(j%p, p)*fct;
-		j /= p;
-		fct *= f;
-	}
-	return h;
-}
-
-
-vec3 Reflect(const vec3 inVector, const vec3 normal)
-{
-	vec3 v = inVector * normal * normal;
-	vec3 h = inVector - v;
-	v *= -1;
-
-	return (v + h).normalize();
-}
 
 HitInfo Ray::BroadPhaseDetection(vector<Shape*>& shapes)
 {
@@ -128,27 +94,6 @@ void Ray::GeneratePhotonRay(vec3& f, int i) {
 	double st = sin(t);
 	startPoint = vec3(50, 60, 85);
 	direction = vec3(cos(p)*st, cos(t), sin(p)*st);
-}
-
-double CalculateCos2t(bool isIntoGlass, vec3& rayDirection, vec3& normal) {
-	double nnt = isIntoGlass ? REFRACTIVE_INDEX_IN_VACUUM / REFRACTIVE_INDEX_IN_GLASS : REFRACTIVE_INDEX_IN_GLASS / REFRACTIVE_INDEX_IN_VACUUM;
-	double ddn = rayDirection * normal;
-	double cos2t = 1 - nnt * nnt*(1 - ddn * ddn);
-
-	return cos2t;
-}
-
-bool IsTotalInternalReflection(double cos2t) {
-	return cos2t < 0;
-}
-
-vec3 Refract(bool isIntoGlass, vec3& rayDirection, vec3& normal, vec3& hitNormal) {
-	double nnt = isIntoGlass ? REFRACTIVE_INDEX_IN_VACUUM / REFRACTIVE_INDEX_IN_GLASS : REFRACTIVE_INDEX_IN_GLASS / REFRACTIVE_INDEX_IN_VACUUM;
-	double ddn = rayDirection * normal;
-	double cos2t = 1 - nnt * nnt*(1 - ddn * ddn);
-
-	vec3 refractDir = (rayDirection*nnt - hitNormal * ((isIntoGlass ? 1 : -1)*(ddn*nnt + sqrt(cos2t)))).normalize();
-	return refractDir;
 }
 
 void Ray::CastEyeRay(vector<Shape*>& shapes, int dpt, vec3 fl, vec3 adj, int i, int pixelIndex, vector<HitInfo>& hitInfoList) {

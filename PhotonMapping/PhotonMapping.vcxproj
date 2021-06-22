@@ -152,6 +152,7 @@
     <ClInclude Include="Foundation.h" />
     <ClInclude Include="ImageIO.h" />
     <ClInclude Include="Materials.h" />
+    <ClInclude Include="MathUtils.h" />
     <ClInclude Include="Shape.h" />
     <ClInclude Include="stdafx.h" />
     <ClInclude Include="targetver.h" />
@@ -161,6 +162,7 @@
     <ClCompile Include="BroadPhase.cpp" />
     <ClCompile Include="Foundation.cpp" />
     <ClCompile Include="Materials.cpp" />
+    <ClCompile Include="MathUtils.cpp" />
     <ClCompile Include="PhotonMapping.cpp" />
     <ClCompile Include="Shape.cpp" />
     <ClCompile Include="stdafx.cpp">
