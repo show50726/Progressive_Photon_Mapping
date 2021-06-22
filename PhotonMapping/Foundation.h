@@ -19,14 +19,11 @@ const int primes[61] = {
 };
 
 
-
 class Shape;
 class BroadPhase;
 class BoundingBox;
 
-bool IsInShadow(vec3 testPos, vec3 lightPos, vector<Shape*>& shapes, vector<Shape*> exclude);
 vec3 Reflect(const vec3 inVector, const vec3 normal);
-vector<Shape*> GetExcludeVector(vector<Shape*>& shapes, vector<Shape*> exclude);
 double Hal(const int& b, int j);
 unsigned int CalcHash(const int& x, const int& y, const int& z, int numHash);
 int ToInt(double x);
@@ -57,7 +54,6 @@ public:
 
 	Ray(vec3 p, vec3 d, BroadPhase* broadPhase = NULL);
 
-	vec3 CastRay(vector<Shape*>& shapes, vec3 lightPos, vec3 eyePos, float weight);
 	HitInfo BroadPhaseDetection(vector<Shape*>& shapes);
 	void GeneratePhotonRay(vec3& f, int i);
 	void CastEyeRay(vector<Shape*>& shapes, int dpt, vec3 fl, vec3 adj, int i, int pixelIndex, vector<HitInfo>& hitInfoList);
@@ -80,11 +76,6 @@ public:
 	}
 };
 
-inline void waitThreads(vector<thread> &threads) {
-	for (int i = 0; i < threads.size(); i++) {
-		threads[i].join();
-	}
-}
 
 BoundingBox BuildHashGridForPhoton(const int width, const int height, double& hashS, double& numHash, vector<HitInfo>& hitPoints, vector<HitInfoNode*>& hashGrid);
 

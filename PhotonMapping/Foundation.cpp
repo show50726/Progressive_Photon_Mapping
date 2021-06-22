@@ -89,14 +89,6 @@ double Hal(const int& b, int j) {
 	return h;
 }
 
-bool IsInShadow(vec3 testPos, vec3 lightPos, vector<Shape*>& shapes, vector<Shape*> exclude)
-{
-	Ray ray = Ray(testPos, lightPos - testPos);
-	vector<Shape*> temp = GetExcludeVector(shapes, exclude);
-	HitInfo hitInfo = ray.BroadPhaseDetection(temp);
-
-	return hitInfo.hitObj != NULL;
-}
 
 vec3 Reflect(const vec3 inVector, const vec3 normal)
 {
@@ -129,39 +121,6 @@ HitInfo Ray::BroadPhaseDetection(vector<Shape*>& shapes)
 	return _broadPhase->BroadPhaseDetection(*this, shapes);
 }
 
-vec3 Ray::CastRay(vector<Shape*>& shapes, vec3 lightPos, vec3 eyePos, float weight)
-{
-	HitInfo hitInfo = BroadPhaseDetection(shapes);
-	Shape* shape = hitInfo.hitObj;
-	vec3 hitPos = hitInfo.hitPos;
-	
-	if (shape == NULL)
-	{
-		return vec3(0.0, 0.0, 0.0);
-	}
-
-	vec3 hitNormal = shape->GetNormal(hitPos);
-	
-	if (IsInShadow(hitPos, lightPos, shapes, {shape}))
-	{
-		return shape->material.color * shape->material.Ka;
-	}
-	
-	vec3 lightDir = (lightPos - hitPos).normalize();
-	vec3 viewDir = (hitPos - eyePos).normalize();
-	vec3 color = shape->material.CalcColor(hitNormal, lightDir, viewDir);
-
-	vec3 subRayColor = vec3(0.0f, 0.0f, 0.0f);
-	if (shape->material.reflectionRadio > 0.0f)
-	{
-		vec3 reflectDir = Reflect(direction, hitNormal);
-		Ray subRay = Ray(hitPos, reflectDir);
-		float newWeight = weight * shape->material.reflectionRadio;
-		subRayColor += weight * shape->material.reflectionRadio * subRay.CastRay(shapes, lightPos, viewDir, newWeight);
-	}
-
-	return color + subRayColor;
-}
 
 Ray::Ray(vec3 p, vec3 d, BroadPhase* broadPhase)
 {
@@ -200,19 +159,7 @@ void Ray::CastEyeRay(vector<Shape*>& shapes, int dpt, vec3 fl, vec3 adj, int i, 
 	switch (shape->material.rType) {
 	case DIFFUSE:
 	{
-		//cout << "Diffuse" << endl;
-		double r1 = 2.0*PI*Hal(d3 - 1, i);
-		double r2 = Hal(d3 + 0, i);
-		double r2s = sqrt(r2);
-
-		// QMC
-		vec3 w = normal;
-		vec3 u = ((fabs(w[0]) > 0.1 ? vec3(0, 1, 0) : vec3(1, 0, 0)) ^ w).normalize();
-		vec3 v = w ^ u;
-		vec3 d = (u*cos(r1)*r2s + v * sin(r1)*r2s + w * sqrt(1 - r2)).normalize();
-		//
 		hitInfo.f = color % adj;
-		//cout << hitInfo.f[0] << " " << hitInfo.f[1] <<" "<< hitInfo.f[2] << endl;
 		hitInfo.pix = pixelIndex;
 		hitInfo.norm = hitNormal;
 		hitInfoList.push_back(hitInfo);
@@ -220,20 +167,14 @@ void Ray::CastEyeRay(vector<Shape*>& shapes, int dpt, vec3 fl, vec3 adj, int i, 
 	}
 	case SPECULAR:
 	{
-		/*cout << "Specular" << endl;
-		vec3 newD = direction - hitNormal * 2.0*(hitNormal*direction);
-		cout << hitPos[0] << " " << hitPos[1] << " " << hitPos[2];
-		cout << newD[0] << " " << newD[1] << " " << newD[2];*/
-
-		Ray newRay = Ray(hitPos, direction - hitNormal * 2.0*(hitNormal*direction));
+		vec3 reflectDir = Reflect(direction, hitNormal);
+		Ray newRay = Ray(hitPos, reflectDir);
 		newRay.CastEyeRay(shapes, dpt, color%fl, color%adj, i, pixelIndex, hitInfoList);
 
 		break;
 	}
 	case REFRACTION:
 	{
-		//cout << "Refraction" << endl;
-
 		Ray lr = Ray(hitPos, direction - hitNormal * 2.0*(hitNormal*direction));
 		bool into = (hitNormal * normal > 0.0);
 		double nc = 1.0, nt = 1.5;
@@ -284,8 +225,6 @@ void Ray::CastPhotonRay(vector<Shape*>& shapes, int dpt, vec3 fl, vec3 adj, int 
 	switch (shape->material.rType) {
 	case DIFFUSE:
 	{
-		//cout << "Diffuse" << endl;
-
 		double r1 = 2.0*PI*Hal(d3 - 1, i);
 		double r2 = Hal(d3 + 0, i);
 		double r2s = sqrt(r2);
@@ -310,13 +249,11 @@ void Ray::CastPhotonRay(vector<Shape*>& shapes, int dpt, vec3 fl, vec3 adj, int 
 				hp = hp->next;
 				vec3 v = info->hitPos - hitPos;
 
-				//cout << v[0] << " "<< v[1] <<" "<< v[2] << endl;
 				if ((info->norm*hitNormal > 1e-3) && (v*v <= info->r2)) {
 					double g = (info->n*ALPHA+ALPHA) / (info->n*ALPHA + 1.0);
 					info->r2 = info->r2*g;
 					info->n++;
 					info->flux = (info->flux + info->f%fl*(1.0 / PI))*g;
-					//cout << info->flux[0] << " " << info->flux[1] << " " << info->flux[2] << endl;
 				}
 			}
 		}
@@ -328,8 +265,6 @@ void Ray::CastPhotonRay(vector<Shape*>& shapes, int dpt, vec3 fl, vec3 adj, int 
 	}
 	case SPECULAR:
 	{
-		//cout << "Specular" << endl;
-
 		Ray newRay = Ray(hitPos, direction - hitNormal * 2.0*(hitNormal*direction));
 		newRay.CastPhotonRay(shapes, dpt, color%fl, color%adj, i, bbox, numHash, hashS, hashGrid);
 
@@ -337,8 +272,6 @@ void Ray::CastPhotonRay(vector<Shape*>& shapes, int dpt, vec3 fl, vec3 adj, int 
 	}
 	case REFRACTION:
 	{
-		//cout << "Refraction" << endl;
-
 		Ray lr = Ray(hitPos, direction - hitNormal * 2.0*(hitNormal*direction));
 		bool into = hitNormal * normal > 0.0;
 		double nc = 1.0, nt = 1.5;
