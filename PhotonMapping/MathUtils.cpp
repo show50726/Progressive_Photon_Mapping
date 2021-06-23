@@ -19,7 +19,6 @@ double Hal(const int& b, int j) {
 	return h;
 }
 
-
 vec3 Reflect(const vec3 inVector, const vec3 normal)
 {
 	vec3 v = inVector * normal * normal;

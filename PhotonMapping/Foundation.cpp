@@ -6,71 +6,6 @@
 using namespace std;
 
 
-BoundingBox BuildHashGridForPhoton(const int width, const int height, double& hashS, double& numHash, vector<HitInfo>& hitPoints, vector<HitInfoNode*>& hashGrid) {
-	BoundingBox bbox1 = BoundingBox();
-	BoundingBox bbox2 = BoundingBox();
-
-	for (auto& hp : hitPoints) {
-		bbox1.Fit(hp.hitPos);
-	}
-
-	vec3 ssize = bbox1.GetSize();
-	double irad = ((ssize[0] + ssize[1] + ssize[2]) / 3.0) / ((width + height) / 2.0)*2.0;
-	cout << "irad: " << irad << endl;
-
-	int vphoton = 0;
-	
-	for (auto& hp : hitPoints) {
-		hp.r2 = irad * irad;
-		vphoton++;
-		bbox2.Fit(hp.hitPos - irad);
-		bbox2.Fit(hp.hitPos + irad);
-	}
-
-	cout << vphoton << endl;
-
-	hashS = 1.0 / (irad*2.0);
-	numHash = vphoton;
-
-	hashGrid.resize(numHash);
-	for (unsigned int i = 0; i < numHash; i++) {
-		hashGrid[i] = NULL;
-	}
-
-	for (auto& hp : hitPoints) {
-		vec3 bMin = ((hp.hitPos - irad) - vec3(bbox2.xMin, bbox2.yMin, bbox2.zMin))*hashS;
-		vec3 bMax = ((hp.hitPos + irad) - vec3(bbox2.xMin, bbox2.yMin, bbox2.zMin))*hashS;
-
-		// NEED REFACTORING
-		// MAKE HASH GRID A CLASS
-		for (int iz = abs(int(bMin[2])); iz <= abs(int(bMax[2])); iz++) {
-			for (int iy = abs(int(bMin[1])); iy <= abs(int(bMax[1])); iy++) {
-				for (int ix = abs(int(bMin[0])); ix <= abs(int(bMax[0])); ix++) {
-					int hv = CalcHash(ix, iy, iz, numHash);
-					HitInfoNode* node = new HitInfoNode();
-					node->hitInfo = &hp;
-					if (hashGrid[hv] == NULL) {
-						hashGrid[hv] = node;
-					}
-					else {
-						auto curNode = hashGrid[hv];
-						while (curNode->next != NULL) {
-							curNode = curNode->next;
-						}
-						curNode->next = node;
-					}
-				}
-			}
-		}
-		//
-	}
-	
-
-	return bbox2;
-}
-
-
-
 HitInfo Ray::BroadPhaseDetection(vector<Shape*>& shapes)
 {
 	if (_broadPhase == NULL) {
@@ -257,5 +192,80 @@ void Ray::CastPhotonRay(vector<Shape*>& shapes, int dpt, vec3 fl, vec3 adj, int 
 			refractRay.CastPhotonRay(shapes, dpt, fl, fa, i, bbox, numHash, hashS, hashGrid);
 		break;
 	}
+	}
+}
+
+HashGrid::HashGrid(const int width, const int height, vector<HitInfo>& hitPoints) {
+	boundingBox = new BoundingBox();
+	double irad = _CalculateIRad(width, height, hitPoints);
+	
+	cout << "irad: " << irad << endl;
+
+	numHash = _FitBoundingBoxWithHitPointsAndIRad(hitPoints, irad);
+	hashS = 1.0 / (irad*2.0);
+
+	_ResetGrid();
+
+	for (auto& hp : hitPoints) {
+		vec3 bMin = ((hp.hitPos - irad) - vec3(boundingBox->xMin, boundingBox->yMin, boundingBox->zMin))*hashS;
+		vec3 bMax = ((hp.hitPos + irad) - vec3(boundingBox->xMin, boundingBox->yMin, boundingBox->zMin))*hashS;
+
+		for (int iz = abs(int(bMin[2])); iz <= abs(int(bMax[2])); iz++) {
+			for (int iy = abs(int(bMin[1])); iy <= abs(int(bMax[1])); iy++) {
+				for (int ix = abs(int(bMin[0])); ix <= abs(int(bMax[0])); ix++) {
+					_InsertNode(&hp, ix, iy, iz);
+				}
+			}
+		}
+	}
+}
+
+double HashGrid::_CalculateIRad(const int width, const int height, vector<HitInfo>& hitPoints) {
+	BoundingBox bbox1 = BoundingBox();
+
+	for (auto& hp : hitPoints) {
+		bbox1.Fit(hp.hitPos);
+	}
+
+	vec3 ssize = bbox1.GetSize();
+	double irad = ((ssize[0] + ssize[1] + ssize[2]) / 3.0) / ((width + height) / 2.0)*2.0;
+
+	return irad;
+}
+
+void HashGrid::_ResetGrid() {
+	grid.resize(numHash);
+	for (unsigned int i = 0; i < numHash; i++) {
+		grid[i] = NULL;
+	}
+}
+
+int HashGrid::_FitBoundingBoxWithHitPointsAndIRad(vector<HitInfo>& hitPoints, double irad) {
+	int vphoton = 0;
+
+	for (auto& hp : hitPoints) {
+		hp.r2 = irad * irad;
+		vphoton++;
+		boundingBox->Fit(hp.hitPos - irad);
+		boundingBox->Fit(hp.hitPos + irad);
+	}
+
+	return vphoton;
+}
+
+void HashGrid::_InsertNode(HitInfo* hitInfo, int ix, int iy, int iz) {
+	int hv = CalcHash(ix, iy, iz, numHash);
+	HitInfoNode* node = new HitInfoNode();
+	node->hitInfo = hitInfo;
+
+	if (grid[hv] == NULL) {
+		grid[hv] = node;
+	}
+	else {
+		auto curNode = grid[hv];
+		while (curNode->next != NULL) {
+			curNode = curNode->next;
+		}
+		curNode->next = node;
 	}
 }

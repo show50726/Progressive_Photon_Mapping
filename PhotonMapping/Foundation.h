@@ -62,7 +62,21 @@ public:
 	}
 };
 
+class HashGrid {
+public:
+	HashGrid(const int width, const int height, vector<HitInfo>& hitPoints);
+	~HashGrid() { delete boundingBox; }
+	
+	vector<HitInfoNode*> grid;
+	BoundingBox* boundingBox;
+	double hashS;
+	double numHash;
 
-BoundingBox BuildHashGridForPhoton(const int width, const int height, double& hashS, double& numHash, vector<HitInfo>& hitPoints, vector<HitInfoNode*>& hashGrid);
+private:
+	void _ResetGrid();
+	void _InsertNode(HitInfo* hitInfo, int ix, int iy, int iz);
+	int _FitBoundingBoxWithHitPointsAndIRad(vector<HitInfo>& hitPoints, double irad);
+	double _CalculateIRad(const int width, const int height, vector<HitInfo>& hitPoints);
+};
 
 
